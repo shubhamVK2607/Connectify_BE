@@ -5,7 +5,8 @@ import cloudinary from "../lib/cloudinary.js";
 
 export const signup = async (req, res) => {
   try {
-    const { email, password, fullName,photoURL } = req.body;
+    const { email, password, fullName, photoURL } = req.body;
+    
     if (!email || !password || !fullName) {
       return res.status(400).json({ message: "All fields are required" });
     }
@@ -13,28 +14,33 @@ export const signup = async (req, res) => {
     if (password.length < 6) {
       return res
         .status(400)
-        .json({ message: "Password must have atleast 6 charecters" });
+        .json({ message: "Password must have atleast 6 characters" });
     }
 
-    const uploadResponse = await cloudinary.uploader.upload(photoURL);
     const user = await User.findOne({ email });
     if (user) {
       return res.status(400).json({ message: "Email already exist" });
     }
-    const salt = await bcrypt.genSalt(10);
 
+    // Only upload to Cloudinary if photoURL is provided
+    let profilePhotoURL = null;
+    if (photoURL) {
+      const uploadResponse = await cloudinary.uploader.upload(photoURL);
+      profilePhotoURL = uploadResponse.secure_url;
+    }
+
+    const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
     const newUser = new User({
       email,
       fullName,
       password: hashedPassword,
-      photoURL: uploadResponse.secure_url 
+      photoURL: profilePhotoURL  // Will be null if not provided
     });
 
     if (newUser) {
       generateToken(newUser._id, res);
-
       await newUser.save();
 
       res.status(201).json({
